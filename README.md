@@ -5,7 +5,11 @@ utilities with slight customizations as well as new utilities.
 
 ## Installation
 
-TODO - Provide instructions for user to install from the whl. Not sure if I want this on PyPI.
+Please install [pipx](!https://github.com/pypa/pipx) and run:
+
+```zsh
+pipx install git+https://github.com/rmmckay/ccli.git
+```
 
 ## Quick Start
 
@@ -48,8 +52,8 @@ to allow quick help options. The mini-framework for making a new command is:
   ```zsh
   <name of the subpackage>
   ├―― __init__.py
-  ├―― cli.py - has the click command/group function. This will be auto-imported.
-  ├―― main.py - has the real workings and won't be imported unless cli.py does so.
+  ├―― cli.py # has the click command/group function. This will be auto-imported.
+  ├―― main.py # has the real workings and won't be imported unless cli.py does so.
   └―― <other files optional>
   ```
 
@@ -70,11 +74,8 @@ Tests go inside the "tests" directory and should have a similar structure to:
           └―― <other files optional>
   ```
 
-Regression tests and integration tests should be marked as such:
+Integration tests should be marked as such:
 ``pytest.mark.integration``
-and/or
-``pytest.mark.regression``
-(or both)
 The intent is to (A) make unit tests run faster, (B) de-couple coverage from behavior, and (C) make
 it obvious where to find/add associated tests. Then, ``pytest -k`` makes it simple to select which
 tests to run.
