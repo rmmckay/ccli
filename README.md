@@ -84,7 +84,7 @@ tests to run.
 
 ### 0.1.1
 
-* Adds summary (default) and `--no-summary` option.
+* Adds report (default) and `--noreport` option.
 * Fixes bug with non-existing input paths.
 * Adds versioning test.
 
