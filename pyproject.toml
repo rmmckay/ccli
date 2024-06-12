@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "ccli"
-version = "0.1.0"
+version = "0.1.1"
 description = "Custom Command Line Interface"
 authors = ["Robert McKay"]
 license = "MIT"
@@ -19,6 +19,7 @@ pytest = "^8.2.0"
 pytest-cov = "^5.0.0"
 flake8 = "^7.0.0"
 mypy = "^1.10.0"
+tomlkit = "^0.12.5"
 
 [build-system]
 requires = ["poetry-core"]

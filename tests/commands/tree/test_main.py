@@ -22,7 +22,7 @@ class TestTree:
     @pytest.fixture(autouse=True)
     def mock_run(self):
         """Don't need to run inside these unit tests."""
-        with mock.patch("ccli.commands.tree.main.Tree.run", autospec=True):
+        with mock.patch("ccli.commands.tree.main.Tree._run", autospec=True):
             yield
 
     @pytest.mark.usefixtures("simple_tree")
@@ -172,12 +172,131 @@ class TestTree:
         else:
             assert result == expectation
 
+    @pytest.mark.parametrize("permissions", [False, True])
+    @pytest.mark.parametrize("group", [False, True])
+    @mock.patch("ccli.commands.tree.main.Tree._summarize", autospec=True)
+    @mock.patch("ccli.commands.tree.main.Tree._get_permissions", autospec=True)
+    @mock.patch("ccli.commands.tree.main.Tree._get_group", autospec=True)
+    @mock.patch("ccli.commands.tree.main.cprint", autospec=True)
+    def test_print_permissions(
+        self,
+        mock_cprint,
+        mock_get_group,
+        mock_get_permissions,
+        mock_summarize,
+        permissions,
+        group,
+        tree_kwargs,
+    ):
+        tree_kwargs.update({
+            "permissions": permissions,
+            "group": group,
+        })
+        tree = main.Tree(**tree_kwargs)
+        mock_path = mock.MagicMock(spec=str)
+        tree._print_permissions(path=mock_path)
+        mock_calls = []
+        for var, callback in (
+            (permissions, mock_get_permissions),
+            (group, mock_get_group),
+        ):
+            if var:
+                callback.assert_called_once_with(tree, path=mock_path)
+                mock_calls.append(mock.call(
+                    callback.return_value,
+                    color=tree.permissions_color,
+                    attrs=tree.permissions_attrs,
+                    end=" ",
+                ))
+        mock_cprint.assert_has_calls(mock_calls)
+
+    @pytest.mark.parametrize("files_num, files_name", [
+        (0, "files"),
+        (1, "file"),
+        (2, "files"),
+    ])
+    @pytest.mark.parametrize("file_links_num, file_links_name", [
+        (0, "file links"),
+        (1, "file link"),
+        (2, "file links"),
+    ])
+    @pytest.mark.parametrize("directories_num, directories_name", [
+        (0, "directories"),
+        (1, "directory"),
+        (2, "directories"),
+    ])
+    @pytest.mark.parametrize("directory_links_num, directory_links_name", [
+        (0, "directory links"),
+        (1, "directory link"),
+        (2, "directory links"),
+    ])
+    def test_summarize(
+        self,
+        files_num,
+        files_name,
+        file_links_num,
+        file_links_name,
+        directories_num,
+        directories_name,
+        directory_links_num,
+        directory_links_name,
+        tree_kwargs,
+        capfd,
+    ):
+        tree = main.Tree(**tree_kwargs)
+        tree._counter.clear()
+        tree._counter.update({
+            "directories": directories_num,
+            "directory links": directory_links_num,
+            "files": files_num,
+            "file links": file_links_num,
+        })
+        capfd.readouterr()
+        tree._summarize()
+        result = capfd.readouterr().out
+        assert result == ", ".join(
+            f"{num} {name}"
+            for num, name in (
+                (directories_num, directories_name),
+                (directory_links_num, directory_links_name),
+                (files_num, files_name),
+                (file_links_num, file_links_name),
+            )
+        ) + "\n"
+
+    @pytest.mark.parametrize("list_hidden", [False, True])
+    @pytest.mark.parametrize("hidden", [False, True])
+    @pytest.mark.parametrize("list_only_dirs", [False, True])
+    @pytest.mark.parametrize("is_dir", [False, True])
+    @mock.patch("ccli.commands.tree.main.os.path.isdir", autospec=True)
+    def test_to_print(
+        self,
+        mock_isdir,
+        is_dir,
+        list_only_dirs,
+        hidden,
+        list_hidden,
+        tree_kwargs,
+    ):
+        name = ".name" if hidden else "name"
+        mock_isdir.return_value = is_dir
+        tree_kwargs.update({
+            "list_hidden": list_hidden,
+            "list_only_dirs": list_only_dirs,
+        })
+        tree = main.Tree(**tree_kwargs)
+        if (hidden and not list_hidden) or (list_only_dirs and not is_dir):
+            expectation = False
+        else:
+            expectation = True
+        assert tree._to_print(path="", name=name) is expectation
+
 
 @pytest.mark.integration
 @pytest.mark.usefixtures("simple_tree")
 class TestSimpleTree:
-    """Tests that use multiple components instead of a single unit.
-    """
+    """Tests that use multiple components instead of a single unit."""
+
     def test(self, tree_kwargs, capfd):
         main.Tree(**tree_kwargs)
         assert capfd.readouterr().out == """\
@@ -190,6 +309,7 @@ starting_path
 ├―― b_file
 ├―― broken_link
 └―― c_file
+2 directories, 2 file links, 4 files, 1 directory link
 """
 
     def test_permissions(self, tree_kwargs, capfd):
@@ -205,6 +325,7 @@ drwxr-xr-x starting_path
 ├―― -rw-rw-r-- b_file
 ├―― ?????????? broken_link
 └―― -rw-rw-r-- c_file
+2 directories, 2 file links, 4 files, 1 directory link
 """
 
     def test_group(self, gid, tree_kwargs, capfd):
@@ -221,6 +342,7 @@ drwxr-xr-x starting_path
 ├―― {group} b_file
 ├―― ??? broken_link
 └―― {group} c_file
+2 directories, 2 file links, 4 files, 1 directory link
 """
 
     def test_size(self, mock_get_stats, tree_kwargs, capfd):
@@ -237,6 +359,7 @@ drwxr-xr-x starting_path
 ├―― {size} b_file
 ├―― {size} broken_link
 └―― {size} c_file
+2 directories, 2 file links, 4 files, 1 directory link
 """
 
     def test_ignore_tree(self, tree_kwargs, capfd):
@@ -252,6 +375,7 @@ a_file
 b_file
 broken_link
 c_file
+2 directories, 2 file links, 4 files, 1 directory link
 """
 
     @pytest.mark.parametrize("list_hidden", [False, True])
@@ -296,3 +420,13 @@ c_file
     def test_main(self, mock_tree, tree_kwargs):
         main.main(**tree_kwargs)
         mock_tree.assert_called_once_with(**tree_kwargs)
+
+
+@pytest.mark.integration
+def test_missing_input_path(tmp_path, tree_kwargs, capfd):
+    target = tmp_path / "does not exist"
+    if target.exists():
+        pytest.fail(f"Expected {target} to not exist - fix this test.")
+    tree_kwargs['paths'] = (str(target),)
+    main.Tree(**tree_kwargs)
+    assert capfd.readouterr().out == "\n"

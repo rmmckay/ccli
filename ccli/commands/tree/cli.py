@@ -124,13 +124,13 @@ from ...commands import invoke_main
 # @click.option(
 #     "--inodes", is_flag=True, help="Print the inode number."
 # )
-# @click.option(
-#     "--noreport",
-#     "report",
-#     is_flag=True,
-#     default=False,
-#     help="Skip the file / directory summary.",
-# )
+@click.option(
+    "--noreport",
+    "report",
+    is_flag=True,
+    default=True,
+    help="Skip the file / directory summary.",
+)
 def tree(paths=(), **kwargs):
     """Pretty listing of directory structures.
 

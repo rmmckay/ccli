@@ -113,7 +113,7 @@ def tree_kwargs(starting_path):
         "paths": (str(starting_path),),
         "pattern": None,
         "permissions": False,
-        "report": False,
+        "report": True,
         "reverse": False,
         "size": False,
         "time": False,
