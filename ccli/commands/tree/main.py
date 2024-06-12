@@ -2,6 +2,7 @@ import grp
 import math
 import os
 import stat
+from collections import Counter
 from functools import partial, wraps
 from termcolor import cprint
 
@@ -64,8 +65,13 @@ class Tree:
 
     def __init__(self, **kwargs):
         vars(self).update(kwargs)
+        self._counter = Counter()
         for path in self.paths:
-            self.run(path=path)
+            # Broken links OK
+            if os.path.exists(path) or os.path.islink(path):
+                self._run(path=path)
+        if self.report:
+            self._summarize()
 
     @property
     def corner(self):
@@ -153,10 +159,6 @@ class Tree:
 
     def _ls(self, path):
         """List the requested path's contents in the correct order."""
-        list_hidden = self.list_hidden
-        list_only_dirs = self.list_only_dirs
-        join = os.path.join
-        isdir = os.path.isdir
         if self.time:
             key = partial(self._get_mtime, parent=path)
         else:
@@ -165,24 +167,13 @@ class Tree:
             (
                 name
                 for name in os.listdir(path)
-                if (
-                    not (hidden := name.startswith("."))
-                    or (list_hidden and hidden)  # noqa W503
-                )
-                and (  # noqa W503
-                    (list_only_dirs and isdir(join(path, name)))
-                    or not list_only_dirs  # noqa W503
-                )
+                if self._to_print(path, name)
             ),
             key=key,
             reverse=self.reverse,
         )
 
-    def run(self, path, _prefix=""):
-        """Recursively print the tree for the specified path."""
-        color, attrs, inside = self._details(path=path)
-        printpath = path if self.full_path else os.path.basename(path)
-        cprint(_prefix, color=self.tree_color, attrs=self.tree_attrs, end="")
+    def _print_permissions(self, path):
         for var, callback in (
             (self.permissions, self._get_permissions),
             (self.group, self._get_group),
@@ -194,6 +185,8 @@ class Tree:
                     attrs=self.permissions_attrs,
                     end=" ",
                 )
+
+    def _print_size(self, path):
         if self.size or self.nice_size:
             cprint(
                 self._get_size(path=path),
@@ -201,7 +194,28 @@ class Tree:
                 attrs=self.size_attrs,
                 end=" ",
             )
+
+    def _register_path(self, path):
+        isdir = os.path.isdir(path)
+        islink = os.path.islink(path)
+        if islink:
+            key = "directory links" if isdir else "file links"
+        else:
+            key = "directories" if isdir else "files"
+        self._counter[key] += 1
+
+    def _print_and_register_path(self, path, color, attrs):
+        self._register_path(path)
+        printpath = path if self.full_path else os.path.basename(path)
         cprint(printpath, color=color, attrs=attrs)
+
+    def _run(self, path, _prefix=""):
+        """Recursively print the tree for the specified path."""
+        color, attrs, inside = self._details(path=path)
+        cprint(_prefix, color=self.tree_color, attrs=self.tree_attrs, end="")
+        self._print_permissions(path=path)
+        self._print_size(path=path)
+        self._print_and_register_path(path=path, color=color, attrs=attrs)
         if self.ignore_tree:
             prefixes = [""] * len(inside)
         else:
@@ -211,7 +225,29 @@ class Tree:
             ).replace(tee, vbar + " " * len(self.hbar))
             prefixes = [f"{tee} "] * (len(inside) - 1) + [f"{corner} "]
         for sub, prefix in zip(inside, prefixes):
-            self.run(_prefix=_prefix + prefix, path=os.path.join(path, sub))
+            self._run(_prefix=_prefix + prefix, path=os.path.join(path, sub))
+
+    def _summarize(self):
+        cprint(", ".join(
+            f"{value} {self._singluar_or_plural(name=key, number=value)}"
+            for key, value in self._counter.items()
+        ))
+
+    def _to_print(self, path, name):
+        if not self.list_hidden and name.startswith("."):
+            return False
+        if self.list_only_dirs and not os.path.isdir(os.path.join(path, name)):
+            return False
+        return True
+
+    @staticmethod
+    def _singluar_or_plural(name, number):
+        """Change plural name to singular if number is 1"""
+        if number == 1:
+            if name.endswith("ies"):
+                return name.removesuffix("ies") + "y"
+            return name.removesuffix("s")
+        return name
 
 
 def main(*args, **kwargs):

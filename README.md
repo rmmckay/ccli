@@ -82,6 +82,12 @@ tests to run.
 
 ## Version Information
 
+### 0.1.1
+
+* Adds summary (default) and `--no-summary` option.
+* Fixes bug with non-existing input paths.
+* Adds versioning test.
+
 ### 0.1.0
 
 * Custom version of the `tree` utility.
