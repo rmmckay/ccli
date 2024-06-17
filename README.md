@@ -34,6 +34,7 @@ Commands:
 ├―― b_file
 ├―― broken_link
 └―― c_file
+2 directories, 1 file link, 4 files, 1 directory link, 1 broken link
 ```
 
 ## Project Structure
@@ -43,9 +44,9 @@ extensible.
 
 ### Lazy Loading
 
-`ccli` uses a `click` for command-line interfaces. It modifies
+`ccli` uses `click` for command-line interfaces. It modifies
 [this recipe](!https://click.palletsprojects.com/en/8.1.x/complex/#defining-the-lazy-group)
-to allow quick help options. The mini-framework for making a new command is:
+to allow quick help options. The procedure for making a new command is:
 
 1. Add a new subpackage under ccli/commands. It should have the following structure:
 
