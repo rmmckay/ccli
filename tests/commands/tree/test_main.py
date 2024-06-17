@@ -297,7 +297,8 @@ class TestTree:
 class TestSimpleTree:
     """Tests that use multiple components instead of a single unit."""
 
-    def test(self, tree_kwargs, capfd):
+    def testVanilla(self, tree_kwargs, capfd):
+        """Nothing fancy - test the basic functionality."""
         main.Tree(**tree_kwargs)
         assert capfd.readouterr().out == """\
 starting_path
@@ -309,7 +310,7 @@ starting_path
 ├―― b_file
 ├―― broken_link
 └―― c_file
-2 directories, 2 file links, 4 files, 1 directory link
+2 directories, 1 file link, 1 directory link, 3 files, 1 broken link
 """
 
     def test_permissions(self, tree_kwargs, capfd):
@@ -325,7 +326,7 @@ drwxr-xr-x starting_path
 ├―― -rw-rw-r-- b_file
 ├―― ?????????? broken_link
 └―― -rw-rw-r-- c_file
-2 directories, 2 file links, 4 files, 1 directory link
+2 directories, 1 file link, 1 directory link, 3 files, 1 broken link
 """
 
     def test_group(self, gid, tree_kwargs, capfd):
@@ -342,7 +343,7 @@ drwxr-xr-x starting_path
 ├―― {group} b_file
 ├―― ??? broken_link
 └―― {group} c_file
-2 directories, 2 file links, 4 files, 1 directory link
+2 directories, 1 file link, 1 directory link, 3 files, 1 broken link
 """
 
     def test_size(self, mock_get_stats, tree_kwargs, capfd):
@@ -359,7 +360,7 @@ drwxr-xr-x starting_path
 ├―― {size} b_file
 ├―― {size} broken_link
 └―― {size} c_file
-2 directories, 2 file links, 4 files, 1 directory link
+2 directories, 1 file link, 1 directory link, 3 files, 1 broken link
 """
 
     def test_ignore_tree(self, tree_kwargs, capfd):
@@ -375,7 +376,7 @@ a_file
 b_file
 broken_link
 c_file
-2 directories, 2 file links, 4 files, 1 directory link
+2 directories, 1 file link, 1 directory link, 3 files, 1 broken link
 """
 
     @pytest.mark.parametrize("list_hidden", [False, True])
@@ -423,10 +424,39 @@ c_file
 
 
 @pytest.mark.integration
-def test_missing_input_path(tmp_path, tree_kwargs, capfd):
-    target = tmp_path / "does not exist"
-    if target.exists():
-        pytest.fail(f"Expected {target} to not exist - fix this test.")
-    tree_kwargs['paths'] = (str(target),)
-    main.Tree(**tree_kwargs)
-    assert capfd.readouterr().out == "\n"
+class TestCornerCases:
+    def test_missing_input_path(self, tmp_path, tree_kwargs, capfd):
+        target = tmp_path / "does not exist"
+        if target.exists():
+            pytest.fail(f"Expected {target} to not exist - fix this test.")
+        tree_kwargs['paths'] = (str(target),)
+        main.Tree(**tree_kwargs)
+        assert capfd.readouterr().out == "\n"
+
+    def test_recursive_link(self, recursive_link, tree_kwargs, capfd):
+        tree_kwargs['follow_links'] = True
+        main.Tree(**tree_kwargs)
+        assert capfd.readouterr().out == """\
+starting_path
+└―― points_to_self
+1 directory, 1 broken link
+"""
+
+    def test_nested_link_recursion(
+        self,
+        nested_link_recursion,
+        tree_kwargs,
+        capfd,
+    ):
+        tree_kwargs["follow_links"] = True
+        main.Tree(**tree_kwargs)
+        assert capfd.readouterr().out == """\
+starting_path
+├―― chicken
+│   └―― egg
+│       └―― chicken
+│           └―― ...
+└―― egg
+    └―― ...
+2 directories, 2 directory links
+"""

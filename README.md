@@ -82,6 +82,13 @@ tests to run.
 
 ## Version Information
 
+### 0.1.2
+
+* `-f` (follow links)
+  * Handles previously-encountered paths.
+  * Corrects report.
+* Report shows broken links instead of bundling them with file links.
+
 ### 0.1.1
 
 * Adds report (default) and `--noreport` option.

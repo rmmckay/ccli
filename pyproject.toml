@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "ccli"
-version = "0.1.1"
+version = "0.1.2"
 description = "Custom Command Line Interface"
 authors = ["Robert McKay"]
 license = "MIT"

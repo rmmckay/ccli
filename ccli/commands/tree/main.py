@@ -66,6 +66,7 @@ class Tree:
     def __init__(self, **kwargs):
         vars(self).update(kwargs)
         self._counter = Counter()
+        self._resolved_paths = set()
         for path in self.paths:
             # Broken links OK
             if os.path.exists(path) or os.path.islink(path):
@@ -90,14 +91,15 @@ class Tree:
         return self.tee_ + self.hbar
 
     def _details(self, path):
-        ospath = os.path
         inside = []
-        islink = ospath.islink(path)
-        if isdir := ospath.isdir(path):
-            if not islink or (islink and self.follow_links):
+        islink = os.path.islink(path)
+        if isdir := os.path.isdir(path):
+            if self._seen_inside(path):
+                inside = ["..."]
+            elif not islink or (islink and self.follow_links):
                 inside = self._ls(path)
         if islink:
-            if ospath.exists(path):
+            if os.path.exists(path):
                 return self.link_color, self.link_attrs, inside
             return self.broken_link_color, self.link_attrs, inside
         if isdir:
@@ -173,6 +175,10 @@ class Tree:
             reverse=self.reverse,
         )
 
+    def _print_path(self, path, color, attrs):
+        print_path = path if self.full_path else os.path.basename(path)
+        cprint(print_path, color=color, attrs=attrs)
+
     def _print_permissions(self, path):
         for var, callback in (
             (self.permissions, self._get_permissions),
@@ -196,18 +202,23 @@ class Tree:
             )
 
     def _register_path(self, path):
+        if path in self._resolved_paths:
+            return
+        self._resolved_paths.add(os.path.realpath(path))
         isdir = os.path.isdir(path)
         islink = os.path.islink(path)
+        exists = os.path.exists(path)
         if islink:
-            key = "directory links" if isdir else "file links"
+            if exists:
+                key = "directory links" if isdir else "file links"
+            else:
+                key = "broken links"
         else:
-            key = "directories" if isdir else "files"
+            if exists:
+                key = "directories" if isdir else "files"
+            else:
+                return
         self._counter[key] += 1
-
-    def _print_and_register_path(self, path, color, attrs):
-        self._register_path(path)
-        printpath = path if self.full_path else os.path.basename(path)
-        cprint(printpath, color=color, attrs=attrs)
 
     def _run(self, path, _prefix=""):
         """Recursively print the tree for the specified path."""
@@ -215,7 +226,8 @@ class Tree:
         cprint(_prefix, color=self.tree_color, attrs=self.tree_attrs, end="")
         self._print_permissions(path=path)
         self._print_size(path=path)
-        self._print_and_register_path(path=path, color=color, attrs=attrs)
+        self._print_path(path=path, color=color, attrs=attrs)
+        self._register_path(path=path)
         if self.ignore_tree:
             prefixes = [""] * len(inside)
         else:
@@ -226,6 +238,11 @@ class Tree:
             prefixes = [f"{tee} "] * (len(inside) - 1) + [f"{corner} "]
         for sub, prefix in zip(inside, prefixes):
             self._run(_prefix=_prefix + prefix, path=os.path.join(path, sub))
+
+    def _seen_inside(self, path):
+        return self.follow_links and (
+            os.path.realpath(path) in self._resolved_paths
+        )
 
     def _summarize(self):
         cprint(", ".join(
