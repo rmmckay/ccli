@@ -15,5 +15,5 @@ def test_tree(chdir, simple_tree, starting_path):
 ├―― b_file
 ├―― broken_link
 └―― c_file
-2 directories, 2 file links, 4 files, 1 directory link
+2 directories, 1 file link, 4 files, 1 directory link, 1 broken link
 """

@@ -90,6 +90,19 @@ def simple_tree(make_path):
 
 
 @pytest.fixture
+def recursive_link(make_path):
+    make_path(name="points_to_self", kind="link", src="points_to_self")
+
+
+@pytest.fixture
+def nested_link_recursion(make_path):
+    chicken = make_path(name="chicken", kind="dir", mode=0o775)
+    egg = make_path(name="egg", kind="dir", mode=0o775)
+    make_path(name=egg / "chicken", kind="link", src="../chicken")
+    make_path(name=chicken / "egg", kind="link", src="../egg")
+
+
+@pytest.fixture
 def tree_kwargs(starting_path):
     """Basic keyword arguments for Tree."""
     return {
