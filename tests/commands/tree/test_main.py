@@ -18,27 +18,17 @@ def mock_get_stats():
         yield mock_get_stats
 
 
+@pytest.fixture
+def mock_run():
+    with mock.patch("ccli.commands.tree.main.Tree._run", autospec=True):
+        yield
+
+
 class TestTree:
     @pytest.fixture(autouse=True)
-    def mock_run(self):
+    def mock_run(self, mock_run):
         """Don't need to run inside these unit tests."""
-        with mock.patch("ccli.commands.tree.main.Tree._run", autospec=True):
-            yield
-
-    @pytest.mark.usefixtures("simple_tree")
-    @pytest.mark.parametrize("follow_links", (False, True))
-    def test_details(self, follow_links, starting_path, tree_kwargs):
-        tree_kwargs["follow_links"] = follow_links
-        tree = main.Tree(**tree_kwargs)
-        details = tree._details(path=starting_path / "a_dir" / "c_dir")
-        if follow_links:
-            assert details == (
-                tree.link_color,
-                tree.link_attrs,
-                ["a_file", "b_file", "c_file"],
-            )
-        else:
-            assert details == (tree.link_color, tree.link_attrs, [])
+        yield
 
     @pytest.mark.parametrize("exists", [False, True])
     @mock.patch("grp.getgrgid", autospec=True, return_value=[mock.MagicMock()])
@@ -297,7 +287,7 @@ class TestTree:
 class TestSimpleTree:
     """Tests that use multiple components instead of a single unit."""
 
-    def testVanilla(self, tree_kwargs, capfd):
+    def test_vanilla(self, tree_kwargs, capfd):
         """Nothing fancy - test the basic functionality."""
         main.Tree(**tree_kwargs)
         assert capfd.readouterr().out == """\
@@ -312,6 +302,33 @@ starting_path
 └―― c_file
 2 directories, 1 file link, 1 directory link, 3 files, 1 broken link
 """
+
+    @pytest.mark.usefixtures("mock_run")
+    @pytest.mark.parametrize("name, expectation", [
+        ("a_dir", (
+            main.Tree.dir_color,
+            main.Tree.dir_attrs,
+            ["a_file", "b_file", "c_dir"],
+        )),
+        (os.sep.join(("a_dir", "a_file")), (
+            main.Tree.link_color,
+            main.Tree.link_attrs,
+            [],
+        )),
+        ("b_file", (
+            main.Tree.file_color,
+            main.Tree.file_attrs,
+            [],
+        )),
+        ("broken_link", (
+            main.Tree.broken_link_color,
+            main.Tree.link_attrs,
+            [],
+        )),
+    ])
+    def test_details(self, name, expectation, starting_path, tree_kwargs):
+        tree = main.Tree(**tree_kwargs)
+        assert tree._details(path=starting_path / name) == expectation
 
     def test_permissions(self, tree_kwargs, capfd):
         tree_kwargs["permissions"] = True
@@ -460,3 +477,21 @@ starting_path
     └―― ...
 2 directories, 2 directory links
 """
+
+    @pytest.mark.usefixtures("mock_run")
+    def test_nested_details(
+        self,
+        nested_link_recursion,
+        starting_path,
+        tree_kwargs
+    ):
+        tree_kwargs["follow_links"] = True
+        tree = main.Tree(**tree_kwargs)
+        path = starting_path / "egg"
+        tree._resolved_paths.add(str(path.resolve()))
+        assert tree._seen_inside(path)
+        assert tree._details(path) == (
+            main.Tree.dir_color,
+            main.Tree.dir_attrs,
+            ["..."],
+        )
