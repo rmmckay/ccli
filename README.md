@@ -83,6 +83,11 @@ tests to run.
 
 ## Version Information
 
+### 0.1.3
+
+* Adds `-C` (force color)
+* Adds `-n` (no color)
+
 ### 0.1.2
 
 * `-f` (follow links)

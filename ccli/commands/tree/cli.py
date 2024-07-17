@@ -38,12 +38,12 @@ from ...commands import invoke_main
     is_flag=True,
     help="Descend into symbolic links.",
 )
-# @click.option(
-#     "-n",
-#     "no_color",
-#     is_flag=True,
-#     help="Turn off colors (overridden by -C).",
-# )
+@click.option(
+    "-n",
+    "no_color",
+    is_flag=True,
+    help="Turn off colors (overridden by -C).",
+)
 @click.option(
     "-p",
     "permissions",
@@ -71,9 +71,9 @@ from ...commands import invoke_main
 # @click.option(
 #     "-u", "user", is_flag=True, help="Print the username (or UID #)."
 # )
-# @click.option(
-#     "-C", "color", is_flag=True, help="Turn on colors (overrides -n)."
-# )
+@click.option(
+    "-C", "force_color", is_flag=True, help="Turn on colors (overrides -n)."
+)
 # @click.option(
 #     "-D",
 #     "date",

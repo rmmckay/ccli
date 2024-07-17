@@ -167,7 +167,7 @@ class TestTree:
     @mock.patch("ccli.commands.tree.main.Tree._summarize", autospec=True)
     @mock.patch("ccli.commands.tree.main.Tree._get_permissions", autospec=True)
     @mock.patch("ccli.commands.tree.main.Tree._get_group", autospec=True)
-    @mock.patch("ccli.commands.tree.main.cprint", autospec=True)
+    @mock.patch("ccli.commands.tree.main.Tree._cprint", autospec=True)
     def test_print_permissions(
         self,
         mock_cprint,
@@ -193,6 +193,7 @@ class TestTree:
             if var:
                 callback.assert_called_once_with(tree, path=mock_path)
                 mock_calls.append(mock.call(
+                    tree,
                     callback.return_value,
                     color=tree.permissions_color,
                     attrs=tree.permissions_attrs,

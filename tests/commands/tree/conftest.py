@@ -106,13 +106,13 @@ def nested_link_recursion(make_path):
 def tree_kwargs(starting_path):
     """Basic keyword arguments for Tree."""
     return {
-        "color": False,
         "date": False,
         "dirs_first": None,
         "fifos": False,
         "file_limit": None,
         "follow_links": False,
         "full_path": False,
+        "force_color": False,
         "group": False,
         "ignore_pattern": None,
         "ignore_tree": False,
