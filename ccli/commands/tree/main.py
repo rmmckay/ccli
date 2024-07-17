@@ -90,6 +90,14 @@ class Tree:
     def tee(self):
         return self.tee_ + self.hbar
 
+    def _cprint(self, *args, **kwargs):
+        cprint(
+            *args,
+            no_color=self.no_color if not self.force_color else False,
+            force_color=self.force_color,
+            **kwargs,
+        )
+
     def _details(self, path):
         inside = []
         islink = os.path.islink(path)
@@ -177,7 +185,7 @@ class Tree:
 
     def _print_path(self, path, color, attrs):
         print_path = path if self.full_path else os.path.basename(path)
-        cprint(print_path, color=color, attrs=attrs)
+        self._cprint(print_path, color=color, attrs=attrs)
 
     def _print_permissions(self, path):
         for var, callback in (
@@ -185,7 +193,7 @@ class Tree:
             (self.group, self._get_group),
         ):
             if var:
-                cprint(
+                self._cprint(
                     callback(path=path),
                     color=self.permissions_color,
                     attrs=self.permissions_attrs,
@@ -194,7 +202,7 @@ class Tree:
 
     def _print_size(self, path):
         if self.size or self.nice_size:
-            cprint(
+            self._cprint(
                 self._get_size(path=path),
                 color=self.size_color,
                 attrs=self.size_attrs,
@@ -223,7 +231,12 @@ class Tree:
     def _run(self, path, _prefix=""):
         """Recursively print the tree for the specified path."""
         color, attrs, inside = self._details(path=path)
-        cprint(_prefix, color=self.tree_color, attrs=self.tree_attrs, end="")
+        self._cprint(
+            _prefix,
+            color=self.tree_color,
+            attrs=self.tree_attrs,
+            end="",
+        )
         self._print_permissions(path=path)
         self._print_size(path=path)
         self._print_path(path=path, color=color, attrs=attrs)
@@ -245,7 +258,7 @@ class Tree:
         )
 
     def _summarize(self):
-        cprint(", ".join(
+        self._cprint(", ".join(
             f"{value} {self._singluar_or_plural(name=key, number=value)}"
             for key, value in self._counter.items()
         ))
