@@ -68,9 +68,9 @@ from ...commands import invoke_main
     is_flag=True,
     help="Sort the output by last modification time.",
 )
-# @click.option(
-#     "-u", "user", is_flag=True, help="Print the username (or UID #)."
-# )
+@click.option(
+    "-u", "user", is_flag=True, help="Print the username (or UID #)."
+)
 @click.option(
     "-C", "force_color", is_flag=True, help="Turn on colors (overrides -n)."
 )

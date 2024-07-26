@@ -162,24 +162,41 @@ class TestTree:
         else:
             assert result == expectation
 
+    @mock.patch("ccli.commands.tree.main.pwd", autospec=True)
+    @mock.patch("ccli.commands.tree.main.os.stat", autospec=True)
+    @pytest.mark.parametrize("side_effect", [None, KeyError])
+    def test_get_user(self, mock_stat, mock_pwd, side_effect, tree_kwargs):
+        mock_pwd.getpwuid.side_effect = side_effect
+        tree = main.Tree(**tree_kwargs)
+        user = tree._get_user(path=".")
+        if side_effect == KeyError:
+            assert user == mock_stat.return_value.st_gid
+        else:
+            assert user == mock_pwd.getpwuid.return_value.pw_name
+
     @pytest.mark.parametrize("permissions", [False, True])
     @pytest.mark.parametrize("group", [False, True])
+    @pytest.mark.parametrize("user", [False, True])
     @mock.patch("ccli.commands.tree.main.Tree._summarize", autospec=True)
     @mock.patch("ccli.commands.tree.main.Tree._get_permissions", autospec=True)
+    @mock.patch("ccli.commands.tree.main.Tree._get_user", autospec=True)
     @mock.patch("ccli.commands.tree.main.Tree._get_group", autospec=True)
     @mock.patch("ccli.commands.tree.main.Tree._cprint", autospec=True)
     def test_print_permissions(
         self,
         mock_cprint,
         mock_get_group,
+        mock_get_user,
         mock_get_permissions,
         mock_summarize,
         permissions,
         group,
+        user,
         tree_kwargs,
     ):
         tree_kwargs.update({
             "permissions": permissions,
+            "user": user,
             "group": group,
         })
         tree = main.Tree(**tree_kwargs)
@@ -188,6 +205,7 @@ class TestTree:
         mock_calls = []
         for var, callback in (
             (permissions, mock_get_permissions),
+            (user, mock_get_user),
             (group, mock_get_group),
         ):
             if var:

@@ -83,6 +83,10 @@ tests to run.
 
 ## Version Information
 
+### 0.1.4
+
+* Adds `-u` (user)
+
 ### 0.1.3
 
 * Adds `-C` (force color)

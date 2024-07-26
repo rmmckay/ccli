@@ -1,6 +1,7 @@
 import grp
 import math
 import os
+import pwd
 import stat
 from collections import Counter
 from functools import partial, wraps
@@ -167,6 +168,14 @@ class Tree:
             return f"{round(size / 1024**index, 2)}{self._SI_SUFFIXES[index]}"
         return str(size)
 
+    @_default_missing("?")
+    def _get_user(self, path, stats=None):
+        try:
+            pwuid = pwd.getpwuid(stats.st_uid)
+        except KeyError:
+            return stats.st_gid
+        return pwuid.pw_name
+
     def _ls(self, path):
         """List the requested path's contents in the correct order."""
         if self.time:
@@ -190,6 +199,7 @@ class Tree:
     def _print_permissions(self, path):
         for var, callback in (
             (self.permissions, self._get_permissions),
+            (self.user, self._get_user),
             (self.group, self._get_group),
         ):
             if var:
