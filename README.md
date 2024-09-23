@@ -83,6 +83,10 @@ tests to run.
 
 ## Version Information
 
+### 0.1.5
+
+* Adds `-D` (date)
+
 ### 0.1.4
 
 * Adds `-u` (user)

@@ -4,6 +4,7 @@ import os
 import pwd
 import stat
 from collections import Counter
+from datetime import datetime, timedelta
 from functools import partial, wraps
 from termcolor import cprint
 
@@ -45,28 +46,32 @@ class Tree:
         "T",
         "P",
     )
+    _YEAR_CUTOFF_AGE_DAYS = 182.5
     corner_ = "└"
     hbar_ = "―"
     tee_ = "├"
     vbar_ = "│"
     broken_link_color = "red"
-    tree_color = "yellow"
     tree_attrs = ()
-    dir_color = "cyan"
+    tree_color = "yellow"
+    date_attrs = ()
+    date_color = "magenta"
     dir_attrs = ("bold",)
-    file_color = "white"
+    dir_color = "cyan"
     file_attrs = ()
-    link_color = "green"
+    file_color = "white"
     link_attrs = ("underline",)
-    permissions_color = "magenta"
+    link_color = "green"
     permissions_attrs = ()
+    permissions_color = "magenta"
     prefix = ""
-    size_color = "white"
     size_attrs = ()
+    size_color = "white"
 
     def __init__(self, **kwargs):
         vars(self).update(kwargs)
         self._counter = Counter()
+        self._now = datetime.now()
         self._resolved_paths = set()
         for path in self.paths:
             # Broken links OK
@@ -114,6 +119,17 @@ class Tree:
         if isdir:
             return self.dir_color, self.dir_attrs, inside
         return self.file_color, self.file_attrs, inside
+
+    @_default_missing("??? ?? ?????")
+    def _get_date(self, path, stats=None):
+        date = datetime.fromtimestamp(stats.st_mtime)
+        if timedelta(days=0) < (
+            self._now - date
+        ) < timedelta(days=self._YEAR_CUTOFF_AGE_DAYS):
+            suffix = f"{date:%H:%M}"
+        else:
+            suffix = f"{date.year:>5}"
+        return f"{date:%b} {date.day:>2} {suffix}"
 
     def _get_stats(self, path):
         if os.path.exists(path):
@@ -192,6 +208,15 @@ class Tree:
             reverse=self.reverse,
         )
 
+    def _print_mod_time(self, path):
+        if self.date:
+            self._cprint(
+                self._get_date(path=path),
+                color=self.date_color,
+                attrs=self.date_attrs,
+                end=" ",
+            )
+
     def _print_path(self, path, color, attrs):
         print_path = path if self.full_path else os.path.basename(path)
         self._cprint(print_path, color=color, attrs=attrs)
@@ -249,6 +274,7 @@ class Tree:
         )
         self._print_permissions(path=path)
         self._print_size(path=path)
+        self._print_mod_time(path=path)
         self._print_path(path=path, color=color, attrs=attrs)
         self._register_path(path=path)
         if self.ignore_tree:
