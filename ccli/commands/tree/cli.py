@@ -74,12 +74,12 @@ from ...commands import invoke_main
 @click.option(
     "-C", "force_color", is_flag=True, help="Turn on colors (overrides -n)."
 )
-# @click.option(
-#     "-D",
-#     "date",
-#     is_flag=True,
-#     help="Print the date of the last modification time.",
-# )
+@click.option(
+    "-D",
+    "date",
+    is_flag=True,
+    help="Print the date of the last modification time.",
+)
 # @click.option(
 #     "-F",
 #     "fifos",

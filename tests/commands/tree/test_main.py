@@ -3,16 +3,19 @@ import math
 import os
 import pytest
 import stat
+from datetime import datetime, timedelta
 from types import SimpleNamespace
 from unittest import mock
 
 from ccli.commands.tree import main
+from ccli.commands.tree.main import Tree
 
 
 @pytest.fixture
 def mock_get_stats():
-    with mock.patch(
-        "ccli.commands.tree.main.Tree._get_stats",
+    with mock.patch.object(
+        Tree,
+        "_get_stats",
         autospec=True,
     ) as mock_get_stats:
         yield mock_get_stats
@@ -20,7 +23,13 @@ def mock_get_stats():
 
 @pytest.fixture
 def mock_run():
-    with mock.patch("ccli.commands.tree.main.Tree._run", autospec=True):
+    with mock.patch.object(Tree, "_run", autospec=True):
+        yield
+
+
+@pytest.fixture
+def mock_summarize():
+    with mock.patch.object(Tree, "_summarize", autospec=True):
         yield
 
 
@@ -30,8 +39,42 @@ class TestTree:
         """Don't need to run inside these unit tests."""
         yield
 
+    @pytest.fixture(autouse=True)
+    def mock_summarize(self, request):
+        """Don't need to summarize inside most of these tests."""
+        if request.node.originalname != "test_summarize":
+            request.getfixturevalue("mock_summarize")
+        yield
+
+    @pytest.mark.parametrize("offset", [
+        0,
+        Tree._YEAR_CUTOFF_AGE_DAYS / 2,
+        Tree._YEAR_CUTOFF_AGE_DAYS,
+    ])
+    def test_get_date(
+        self,
+        offset,
+        mock_get_stats,
+        starting_path,
+        tree_kwargs,
+    ):
+        tree = Tree(**tree_kwargs)
+        date = datetime.fromtimestamp(mock_get_stats.return_value.st_mtime)
+        tree._now = date + timedelta(offset)
+        if 0 < offset < tree._YEAR_CUTOFF_AGE_DAYS:
+            suffix = f"{date:%H:%M}"
+        else:
+            suffix = f"{date.year:>5}"
+        result = tree._get_date(path=starting_path)
+        assert result == f"{date:%b} {date.day:>2} {suffix}"
+
     @pytest.mark.parametrize("exists", [False, True])
-    @mock.patch("grp.getgrgid", autospec=True, return_value=[mock.MagicMock()])
+    @mock.patch.object(
+        main.grp,
+        "getgrgid",
+        autospec=True,
+        return_value=[mock.MagicMock(name="gr_name")],
+    )
     def test_get_group(
         self,
         mock_getgrgid,
@@ -45,7 +88,7 @@ class TestTree:
             expectation = "???"
         else:
             expectation = mock_getgrgid.return_value[0]
-        group = main.Tree(**tree_kwargs)._get_group(path=starting_path)
+        group = Tree(**tree_kwargs)._get_group(path=starting_path)
         assert group == expectation
 
     @pytest.mark.parametrize("exists", [False, True])
@@ -58,7 +101,7 @@ class TestTree:
     ):
         if not exists:
             mock_get_stats.return_value = None
-        tree = main.Tree(**tree_kwargs)
+        tree = Tree(**tree_kwargs)
         mtime = tree._get_mtime(
             name=starting_path.name,
             parent=starting_path.parent,
@@ -69,7 +112,7 @@ class TestTree:
         else:
             assert mtime == float("inf")
 
-    @pytest.mark.parametrize("kind", main.Tree._FILE_TYPE_MAP)
+    @pytest.mark.parametrize("kind", Tree._FILE_TYPE_MAP)
     @pytest.mark.parametrize("read", (0, stat.S_IROTH))
     @pytest.mark.parametrize("write", (0, stat.S_IWOTH))
     @pytest.mark.parametrize("exe", (0, stat.S_IXOTH))
@@ -114,13 +157,14 @@ class TestTree:
             ),
         ))
         triples.insert(2 - triple_index, triple)
-        tree = main.Tree(**tree_kwargs)
+        tree = Tree(**tree_kwargs)
         expectation = "".join((
             tree._FILE_TYPE_MAP[kind],
             "".join(triples),
         ))
-        with mock.patch(
-            "os.stat",
+        with mock.patch.object(
+            main.os,
+            "stat",
             autospec=True,
             return_value=SimpleNamespace(
                 st_mode=sum((kind, read, write, exe, special)),
@@ -150,9 +194,10 @@ class TestTree:
         tree_kwargs,
     ):
         tree_kwargs["nice_size"] = nice_size
-        tree = main.Tree(**tree_kwargs)
-        with mock.patch(
-            "os.stat",
+        tree = Tree(**tree_kwargs)
+        with mock.patch.object(
+            main.os,
+            "stat",
             autospec=True,
             return_value=SimpleNamespace(st_size=size) if exists else None,
         ):
@@ -162,33 +207,58 @@ class TestTree:
         else:
             assert result == expectation
 
-    @mock.patch("ccli.commands.tree.main.pwd", autospec=True)
-    @mock.patch("ccli.commands.tree.main.os.stat", autospec=True)
+    @mock.patch.object(main, "pwd", autospec=True)
+    @mock.patch.object(main.os, "stat", autospec=True)
     @pytest.mark.parametrize("side_effect", [None, KeyError])
     def test_get_user(self, mock_stat, mock_pwd, side_effect, tree_kwargs):
         mock_pwd.getpwuid.side_effect = side_effect
-        tree = main.Tree(**tree_kwargs)
+        tree = Tree(**tree_kwargs)
         user = tree._get_user(path=".")
         if side_effect == KeyError:
             assert user == mock_stat.return_value.st_gid
         else:
             assert user == mock_pwd.getpwuid.return_value.pw_name
 
+    @pytest.mark.parametrize("date", [False, True])
+    @mock.patch.object(Tree, "_get_date", autospec=True)
+    @mock.patch.object(Tree, "_cprint", autospec=True)
+    def test_print_mod_time(
+        self,
+        mock_cprint,
+        mock_get_date,
+        date,
+        tree_kwargs,
+    ):
+        tree_kwargs["date"] = date
+        tree = Tree(**tree_kwargs)
+        path = tree.paths[0]
+        tree._print_mod_time(path)
+        if date:
+            mock_cprint.assert_called_once_with(
+                tree,
+                mock_get_date.return_value,
+                color=tree.date_color,
+                attrs=tree.date_attrs,
+                end=" ",
+            )
+            mock_get_date.assert_called_once_with(tree, path=path)
+        else:
+            mock_cprint.assert_not_called()
+            mock_get_date.assert_not_called()
+
     @pytest.mark.parametrize("permissions", [False, True])
     @pytest.mark.parametrize("group", [False, True])
     @pytest.mark.parametrize("user", [False, True])
-    @mock.patch("ccli.commands.tree.main.Tree._summarize", autospec=True)
-    @mock.patch("ccli.commands.tree.main.Tree._get_permissions", autospec=True)
-    @mock.patch("ccli.commands.tree.main.Tree._get_user", autospec=True)
-    @mock.patch("ccli.commands.tree.main.Tree._get_group", autospec=True)
-    @mock.patch("ccli.commands.tree.main.Tree._cprint", autospec=True)
+    @mock.patch.object(Tree, "_get_permissions", autospec=True)
+    @mock.patch.object(Tree, "_get_user", autospec=True)
+    @mock.patch.object(Tree, "_get_group", autospec=True)
+    @mock.patch.object(Tree, "_cprint", autospec=True)
     def test_print_permissions(
         self,
         mock_cprint,
         mock_get_group,
         mock_get_user,
         mock_get_permissions,
-        mock_summarize,
         permissions,
         group,
         user,
@@ -199,7 +269,7 @@ class TestTree:
             "user": user,
             "group": group,
         })
-        tree = main.Tree(**tree_kwargs)
+        tree = Tree(**tree_kwargs)
         mock_path = mock.MagicMock(spec=str)
         tree._print_permissions(path=mock_path)
         mock_calls = []
@@ -252,7 +322,7 @@ class TestTree:
         tree_kwargs,
         capfd,
     ):
-        tree = main.Tree(**tree_kwargs)
+        tree = Tree(**tree_kwargs)
         tree._counter.clear()
         tree._counter.update({
             "directories": directories_num,
@@ -277,7 +347,7 @@ class TestTree:
     @pytest.mark.parametrize("hidden", [False, True])
     @pytest.mark.parametrize("list_only_dirs", [False, True])
     @pytest.mark.parametrize("is_dir", [False, True])
-    @mock.patch("ccli.commands.tree.main.os.path.isdir", autospec=True)
+    @mock.patch.object(main.os.path, "isdir", autospec=True)
     def test_to_print(
         self,
         mock_isdir,
@@ -293,7 +363,7 @@ class TestTree:
             "list_hidden": list_hidden,
             "list_only_dirs": list_only_dirs,
         })
-        tree = main.Tree(**tree_kwargs)
+        tree = Tree(**tree_kwargs)
         if (hidden and not list_hidden) or (list_only_dirs and not is_dir):
             expectation = False
         else:
@@ -308,7 +378,7 @@ class TestSimpleTree:
 
     def test_vanilla(self, tree_kwargs, capfd):
         """Nothing fancy - test the basic functionality."""
-        main.Tree(**tree_kwargs)
+        Tree(**tree_kwargs)
         assert capfd.readouterr().out == """\
 starting_path
 ├―― a_dir
@@ -325,33 +395,33 @@ starting_path
     @pytest.mark.usefixtures("mock_run")
     @pytest.mark.parametrize("name, expectation", [
         ("a_dir", (
-            main.Tree.dir_color,
-            main.Tree.dir_attrs,
+            Tree.dir_color,
+            Tree.dir_attrs,
             ["a_file", "b_file", "c_dir"],
         )),
         (os.sep.join(("a_dir", "a_file")), (
-            main.Tree.link_color,
-            main.Tree.link_attrs,
+            Tree.link_color,
+            Tree.link_attrs,
             [],
         )),
         ("b_file", (
-            main.Tree.file_color,
-            main.Tree.file_attrs,
+            Tree.file_color,
+            Tree.file_attrs,
             [],
         )),
         ("broken_link", (
-            main.Tree.broken_link_color,
-            main.Tree.link_attrs,
+            Tree.broken_link_color,
+            Tree.link_attrs,
             [],
         )),
     ])
     def test_details(self, name, expectation, starting_path, tree_kwargs):
-        tree = main.Tree(**tree_kwargs)
+        tree = Tree(**tree_kwargs)
         assert tree._details(path=starting_path / name) == expectation
 
     def test_permissions(self, tree_kwargs, capfd):
         tree_kwargs["permissions"] = True
-        main.Tree(**tree_kwargs)
+        Tree(**tree_kwargs)
         assert capfd.readouterr().out == """\
 drwxr-xr-x starting_path
 ├―― drwxrwxr-x a_dir
@@ -368,7 +438,7 @@ drwxr-xr-x starting_path
     def test_group(self, gid, tree_kwargs, capfd):
         tree_kwargs["group"] = True
         group = grp.getgrgid(20).gr_name
-        main.Tree(**tree_kwargs)
+        Tree(**tree_kwargs)
         assert capfd.readouterr().out == f"""\
 {group} starting_path
 ├―― {group} a_dir
@@ -385,7 +455,7 @@ drwxr-xr-x starting_path
     def test_size(self, mock_get_stats, tree_kwargs, capfd):
         size = mock_get_stats.return_value.st_size
         tree_kwargs["size"] = True
-        main.Tree(**tree_kwargs)
+        Tree(**tree_kwargs)
         assert capfd.readouterr().out == f"""\
 {size} starting_path
 ├―― {size} a_dir
@@ -401,7 +471,7 @@ drwxr-xr-x starting_path
 
     def test_ignore_tree(self, tree_kwargs, capfd):
         tree_kwargs["ignore_tree"] = True
-        main.Tree(**tree_kwargs)
+        Tree(**tree_kwargs)
         assert capfd.readouterr().out == """\
 starting_path
 a_dir
@@ -450,10 +520,10 @@ c_file
                 else name,
             reverse=reverse,
         )
-        result = main.Tree(**tree_kwargs)._ls(starting_path)
+        result = Tree(**tree_kwargs)._ls(starting_path)
         assert result == expectation
 
-    @mock.patch("ccli.commands.tree.main.Tree", autospec=True)
+    @mock.patch.object(main, "Tree", autospec=True)
     def test_main(self, mock_tree, tree_kwargs):
         main.main(**tree_kwargs)
         mock_tree.assert_called_once_with(**tree_kwargs)
@@ -466,12 +536,12 @@ class TestCornerCases:
         if target.exists():
             pytest.fail(f"Expected {target} to not exist - fix this test.")
         tree_kwargs['paths'] = (str(target),)
-        main.Tree(**tree_kwargs)
+        Tree(**tree_kwargs)
         assert capfd.readouterr().out == "\n"
 
     def test_recursive_link(self, recursive_link, tree_kwargs, capfd):
         tree_kwargs['follow_links'] = True
-        main.Tree(**tree_kwargs)
+        Tree(**tree_kwargs)
         assert capfd.readouterr().out == """\
 starting_path
 └―― points_to_self
@@ -485,7 +555,7 @@ starting_path
         capfd,
     ):
         tree_kwargs["follow_links"] = True
-        main.Tree(**tree_kwargs)
+        Tree(**tree_kwargs)
         assert capfd.readouterr().out == """\
 starting_path
 ├―― chicken
@@ -505,12 +575,12 @@ starting_path
         tree_kwargs
     ):
         tree_kwargs["follow_links"] = True
-        tree = main.Tree(**tree_kwargs)
+        tree = Tree(**tree_kwargs)
         path = starting_path / "egg"
         tree._resolved_paths.add(str(path.resolve()))
         assert tree._seen_inside(path)
         assert tree._details(path) == (
-            main.Tree.dir_color,
-            main.Tree.dir_attrs,
+            Tree.dir_color,
+            Tree.dir_attrs,
             ["..."],
         )
